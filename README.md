@@ -1,29 +1,37 @@
-# 🎓 Official SSC Result Bot 2026
+<div align="center">
 
-An automated Telegram bot to check SSC exam results, marks, and grades instantly from the official education board database. Developed with Python.
+# 🎓 OFFICIAL SSC RESULT BOT 2026
+
+An automated, high-performance Telegram bot designed to fetch SSC exam results instantly and securely.
+
+<br>
+
+[![Telegram Bot](https://img.shields.io/badge/🚀_LAUNCH_BOT-Click_Here_to_Open-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/sscresult2026_bot)
+
+</div>
 
 ---
 
-## 🚀 Live Bot Link
-* **Telegram Bot:** [Click Here to Open Bot](https://t.me/sscresult2026_bot)
+## ✨ Key Features
+* **Instant Results:** Fetch real-time board results, marks, and grades.
+* **Interactive UI:** Clean navigation and smooth user experience.
+* **Secure Verification:** Built-in captcha handling for accurate data processing.
 
 ---
 
-## ✨ Features
-* 📊 Instant real-time result fetching.
-* 🔐 Secure captcha verification support.
-* 👨‍💻 User-friendly interactive inline buttons and welcome interface.
+## 🛠️ Technology Stack
+* **Language:** Python 3
+* **Framework:** python-telegram-bot
+* **Libraries:** Requests, BeautifulSoup4
 
 ---
 
 ## 👨‍💻 Developer & Owner
-* **Name:** MD Rasel
-* **Telegram Username:** [@HANTER_XD_OFFICIAL](https://t.me/HANTER_XD_OFFICIAL)
+* **Developed By:** MD Rasel
+* **Telegram Contact:** [@HANTER_XD_OFFICIAL](https://t.me/HANTER_XD_OFFICIAL)
 
 ---
 
-## 🛠️ Tech Stack
-* **Python 3**
-* **python-telegram-bot**
-* **Requests & BeautifulSoup**
-* 
+<div align="center">
+  <i>⭐ Developed with passion by MD Rasel. Feel free to explore the code!</i>
+</div>
