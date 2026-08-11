@@ -35,10 +35,11 @@ BOARDS = [
 BASE_URL = "https://www.educationboardresults.gov.bd/v2/"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # নতুন সেশন তৈরি যাতে কুকিজ ঠিক থাকে
     session = requests.Session()
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9"
     })
     context.user_data['session'] = session
     
@@ -106,19 +107,14 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         session = context.user_data.get('session')
         
-        # ১. মেইন পেজ ভিজিট করে কুকি সংগ্রহ
+        # মেইন পেজ ভিজিট করে কুকি সংগ্রহ
         res = session.get(BASE_URL)
-        soup = BeautifulSoup(res.text, 'html.parser')
         
-        # ২. ক্যাপচা ইমেজ লিংক খুঁজে বের করা এবং ডাউনলোড করা
-        # (বোর্ড সাইটের ক্যাপচা সাধারণত dynamic src বা captcha endpoint এ থাকে)
-        captcha_img_tag = soup.find('img', {'id': 'captcha'}) or soup.find('img', {'class': 'captcha'})
-        
-        # যদি ডাইরেক্ট ইমেজ পাথ না পাওয়া যায়, স্ট্যান্ডার্ড ক্যাপচা URL ট্রাই করা হবে
-        captcha_url = f"{BASE_URL}captcha.php" if not captcha_img_tag else f"{BASE_URL}{captcha_img_tag.get('src')}"
-        
+        # বোর্ড সাইটের স্ট্যান্ডার্ড ক্যাপচা ইমেজ রিকোয়েস্ট লিংক
+        captcha_url = f"{BASE_URL}captcha.php"
         captcha_res = session.get(captcha_url)
-        if captcha_res.status_code == 200 and len(captcha_res.content) > 100:
+        
+        if captcha_res.status_code == 200 and len(captcha_res.content) > 50:
             captcha_bytes = BytesIO(captcha_res.content)
             captcha_bytes.name = "captcha.png"
             
@@ -127,9 +123,24 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption="🔐 **রিয়েল ক্যাপচা ভেরিফিকেশন:**\n\nউপরে ছবির কোডটি দেখে নিচে লিখে পাঠান:"
             )
         else:
-            # ফলব্যাক মেথড যদি ইমেজ ডাইরেক্ট না মিলে
-            await update.message.reply_text("⚠️ ক্যাপচা ইমেজ লোড করতে সমস্যা হয়েছে। দয়া করে আবার `/start` দিয়ে চেষ্টা করুন।")
-            return ConversationHandler.END
+            # যদি সরাসরি captcha.php না পাওয়া যায়, তবে হোমপেজ থেকে ইমেজ ট্যাগ খোঁজা
+            soup = BeautifulSoup(res.text, 'html.parser')
+            img_tag = soup.find('img', {'id': 'captcha'}) or soup.find('img', src=True)
+            if img_tag:
+                img_src = img_tag['src']
+                if not img_src.startswith('http'):
+                    img_src = BASE_URL + img_src.lstrip('/')
+                
+                captcha_res = session.get(img_src)
+                captcha_bytes = BytesIO(captcha_res.content)
+                captcha_bytes.name = "captcha.png"
+                
+                await update.message.reply_photo(
+                    photo=InputFile(captcha_bytes),
+                    caption="🔐 **রিয়েল ক্যাপচা ভেরিফিকেশন:**\n\nউপরে ছবির কোডটি দেখে নিচে লিখে পাঠান:"
+                )
+            else:
+                raise Exception("Captcha image not found")
 
     except Exception as e:
         logging.error(f"Captcha Error: {e}")
@@ -150,38 +161,23 @@ async def verify_captcha_and_get_result(update: Update, context: ContextTypes.DE
     await update.message.reply_text("🔍 বোর্ড সার্ভারে রিয়েল-টাইম রেজাল্ট যাচাই করা হচ্ছে...")
 
     try:
-        # বোর্ড সাইটের ফর্ম ডাটা সাবমিট করার প্রস্তুতি
         payload = {
+            'sr': '1',
             'board': board,
-            'year': year,
+            'passing_year': year,
             'roll': roll,
             'reg': reg,
             'captcha': user_captcha
         }
         
-        # অফিশিয়াল সাইটে পোস্ট রিকোয়েস্ট পাঠানো (রিয়েল রেজাল্টের জন্য)
         response = session.post(f"{BASE_URL}result.php", data=payload)
-        result_soup = BeautifulSoup(response.text, 'html.parser')
         
-        # সাইটের রেসপন্স থেকে টেক্সট বা মার্কশিট এক্সট্রাক্ট করা
-        # (বোর্ড সাইটের টেবিলে নাম, রোল এবং সাবজেক্ট মার্কস থাকে)
-        name_tag = result_soup.find(text=lambda t: t and "Name" in t)
-        
-        # যদি সাইট থেকে সঠিক রেজাল্ট বা মার্কশিটের টেবিল ডেটা পাওয়া যায়:
-        if response.status_code == 200 and "Invalid" not in response.text and "Error" not in response.text:
-            
-            # টেবিল থেকে টেক্সট পার্স করে সাজানো
-            result_text = (
-                f"📄 **অফিশিয়াল রিয়েল-টাইম মার্কশিট**\n"
-                f"━━━━━━━━━━━━━━━━━━━\n"
-                f"📌 **Roll:** `{roll}` | **Reg:** `{reg}`\n"
-                f"🏛 **Board:** {board.upper()} | 📅 **Year:** {year}\n"
-                f"━━━━━━━━━━━━━━━━━━━\n"
-                f"👇 প্রাপ্ত আসল রেজাল্ট ডেটা:\n\n"
-                f"{response.text[:1500]}"  # বোর্ড সাইটের রিয়েল রেসপন্স টেক্সট এখানে দেখাবে
-            )
+        if response.status_code == 200 and "Invalid" not in response.text and len(response.text) > 200:
+            result_soup = BeautifulSoup(response.text, 'html.parser')
+            # টেক্সট ফরম্যাট এক্সট্রাক্ট করা
+            result_text = f"📄 **অফিশিয়াল রিয়েল-টাইম রেজাল্ট**\n━━━━━━━━━━━━━━━━━━━\n{response.text[:1500]}"
         else:
-            result_text = "❌ **ভুল ক্যাপচা অথবা ইনফরমেশন!**\n\nক্যাপচা মিলছে না অথবা রোল/রেজিস্ট্রেশন ভুল দিয়েছেন। আবার চেষ্টা করতে `/start` লিখুন।"
+            result_text = "❌ **ভুল ক্যাপচা অথবা ইনফরমেশন!**\n\nক্যাপচা মিলছে না অথবা তথ্য সঠিক নয়। আবার চেষ্টা করতে `/start` লিখুন।"
 
         await update.message.reply_text(result_text, parse_mode="Markdown")
 
