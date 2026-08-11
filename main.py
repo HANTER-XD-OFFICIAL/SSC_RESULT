@@ -38,9 +38,11 @@ HOME_URL = "https://www.educationboardresults.gov.bd/v2/home"
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = requests.Session()
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9"
+        "Accept-Language": "en-US,en;q=0.9,bn;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive"
     })
     context.user_data['session'] = session
     
@@ -108,10 +110,9 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         session = context.user_data.get('session')
         
-        # প্রথমে হোমপেজ ভিজিট করে সঠিক কুকি ও সেশন জেনারেট করা
+        # হোমপেজ ভিজিট করে সেশন কুকিভ্যালিড করা
         session.get(HOME_URL, timeout=10)
         
-        # ক্যাপচা ফেচ করার একাধিক রুট ট্রাই করা
         captcha_urls = [
             f"{BASE_URL}captcha.php",
             "https://www.educationboardresults.gov.bd/v2/captcha.php",
