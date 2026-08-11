@@ -33,6 +33,7 @@ BOARDS = [
 ]
 
 BASE_URL = "https://www.educationboardresults.gov.bd/v2/"
+HOME_URL = "https://www.educationboardresults.gov.bd/v2/home"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = requests.Session()
@@ -107,10 +108,14 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         session = context.user_data.get('session')
         
+        # প্রথমে হোমপেজ ভিজিট করে সঠিক কুকি ও সেশন জেনারেট করা
+        session.get(HOME_URL, timeout=10)
+        
+        # ক্যাপচা ফেচ করার একাধিক রুট ট্রাই করা
         captcha_urls = [
+            f"{BASE_URL}captcha.php",
             "https://www.educationboardresults.gov.bd/v2/captcha.php",
-            "https://www.educationboardresults.gov.bd/captcha.php",
-            "https://www.educationboardresults.gov.bd/v2/pages/captcha.php"
+            "https://www.educationboardresults.gov.bd/captcha.php"
         ]
         
         captcha_res = None
@@ -132,7 +137,7 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption="🔐 **রিয়েল ক্যাপচা ভেরিফিকেশন:**\n\nউপরে ছবির কোডটি দেখে নিচে লিখে পাঠান:"
             )
         else:
-            res = session.get(BASE_URL, timeout=10)
+            res = session.get(HOME_URL, timeout=10)
             soup = BeautifulSoup(res.text, 'html.parser')
             img_tag = soup.find('img', {'id': 'captcha'}) or soup.find('img', src=True)
             
@@ -150,7 +155,7 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption="🔐 **রিয়েল ক্যাপচা ভেরিফিকেশন:**\n\nউপরে ছবির কোডটি দেখে নিচে লিখে পাঠান:"
                 )
             else:
-                raise Exception("All captcha fetch methods failed.")
+                raise Exception("Captcha fetch failed from home page.")
 
     except Exception as e:
         logging.error(f"Captcha Error: {e}")
@@ -191,7 +196,7 @@ async def verify_captcha_and_get_result(update: Update, context: ContextTypes.DE
 
     except Exception as e:
         logging.error(f"Result Fetch Error: {e}")
-        await update.message.reply_text("❌ রেজাল্ট ফেচ করার সময় ত্রুটি ঘটেছে। দয়া করে `/start` দিয়ে আবার চেষ্টা করুন।")
+        await update.message.reply_text("❌ রেজাল্ট ফেচ করার সময় ত্রুটি ঘটেছে। দয়া করে `/start` দিয়ে আবার চেষ্টা করুন።")
 
     return ConversationHandler.END
 
