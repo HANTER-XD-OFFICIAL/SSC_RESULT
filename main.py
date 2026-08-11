@@ -15,15 +15,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ইউজারের টেলিগ্রাম নাম সংগ্রহ করা
     user_name = update.effective_user.first_name
     
-    # ওয়েলকাম মেসেজ এবং নিচে রেজাল্ট দেখার বাটন
+    # ওয়েলকাম মেসেজ
     welcome_text = (
-        f"হ্যালো **{user_name}**! 🎓\n\n"
-        f"আমাদের **SSC Result** বটে আপনাকে স্বাগতম।\n"
-        f"নিচের **'SSC রেজাল্ট দেখুন'** বাটনে ক্লিক করে খুব সহজেই আপনার কাঙ্ক্ষিত ফলাফল দেখতে পারবেন।"
+        f"Hello **{user_name}**! 🎓\n\n"
+        f"Welcome to the Official **SSC Result Bot**.\n"
+        f"Developed by **MD Rasel** (@HANTER_XD_OFFICIAL).\n\n"
+        f"Please click the button below to check your SSC result:"
     )
     
+    # নিচে রেজাল্ট দেখার বাটন
     keyboard = [
-        [InlineKeyboardButton("📊 SSC রেজাল্ট দেখুন", callback_data="open_result")]
+        [InlineKeyboardButton("📊 Check SSC Result", callback_data="open_result")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -39,7 +41,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == "open_result":
         await query.edit_message_text(
-            text="🔄 রেজাল্ট চেক করার প্রসেস শুরু হচ্ছে...\nদয়া করে আপনার বোর্ড ও রোল-রেজিস্ট্রেশন দিয়ে এগিয়ে যান।"
+            text="🔄 Result checking process is starting...\nPlease provide your Board, Roll, and Registration number to proceed."
         )
 
 def main():
