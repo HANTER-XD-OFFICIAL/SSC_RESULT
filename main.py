@@ -107,14 +107,23 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         session = context.user_data.get('session')
         
-        # মেইন পেজ ভিজিট করে কুকি সংগ্রহ
-        res = session.get(BASE_URL)
+        captcha_urls = [
+            "https://www.educationboardresults.gov.bd/v2/captcha.php",
+            "https://www.educationboardresults.gov.bd/captcha.php",
+            "https://www.educationboardresults.gov.bd/v2/pages/captcha.php"
+        ]
         
-        # বোর্ড সাইটের স্ট্যান্ডার্ড ক্যাপচা ইমেজ রিকোয়েস্ট লিংক
-        captcha_url = f"{BASE_URL}captcha.php"
-        captcha_res = session.get(captcha_url)
-        
-        if captcha_res.status_code == 200 and len(captcha_res.content) > 50:
+        captcha_res = None
+        for url in captcha_urls:
+            try:
+                res = session.get(url, timeout=10)
+                if res.status_code == 200 and len(res.content) > 100:
+                    captcha_res = res
+                    break
+            except:
+                continue
+
+        if captcha_res and captcha_res.content:
             captcha_bytes = BytesIO(captcha_res.content)
             captcha_bytes.name = "captcha.png"
             
@@ -123,15 +132,16 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption="🔐 **রিয়েল ক্যাপচা ভেরিফিকেশন:**\n\nউপরে ছবির কোডটি দেখে নিচে লিখে পাঠান:"
             )
         else:
-            # যদি সরাসরি captcha.php না পাওয়া যায়, তবে হোমপেজ থেকে ইমেজ ট্যাগ খোঁজা
+            res = session.get(BASE_URL, timeout=10)
             soup = BeautifulSoup(res.text, 'html.parser')
             img_tag = soup.find('img', {'id': 'captcha'}) or soup.find('img', src=True)
-            if img_tag:
+            
+            if img_tag and img_tag.get('src'):
                 img_src = img_tag['src']
                 if not img_src.startswith('http'):
-                    img_src = BASE_URL + img_src.lstrip('/')
+                    img_src = "https://www.educationboardresults.gov.bd" + ('' if img_src.startswith('/') else '/v2/') + img_src
                 
-                captcha_res = session.get(img_src)
+                captcha_res = session.get(img_src, timeout=10)
                 captcha_bytes = BytesIO(captcha_res.content)
                 captcha_bytes.name = "captcha.png"
                 
@@ -140,7 +150,7 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption="🔐 **রিয়েল ক্যাপচা ভেরিফিকেশন:**\n\nউপরে ছবির কোডটি দেখে নিচে লিখে পাঠান:"
                 )
             else:
-                raise Exception("Captcha image not found")
+                raise Exception("All captcha fetch methods failed.")
 
     except Exception as e:
         logging.error(f"Captcha Error: {e}")
@@ -173,8 +183,6 @@ async def verify_captcha_and_get_result(update: Update, context: ContextTypes.DE
         response = session.post(f"{BASE_URL}result.php", data=payload)
         
         if response.status_code == 200 and "Invalid" not in response.text and len(response.text) > 200:
-            result_soup = BeautifulSoup(response.text, 'html.parser')
-            # টেক্সট ফরম্যাট এক্সট্রাক্ট করা
             result_text = f"📄 **অফিশিয়াল রিয়েল-টাইম রেজাল্ট**\n━━━━━━━━━━━━━━━━━━━\n{response.text[:1500]}"
         else:
             result_text = "❌ **ভুল ক্যাপচা অথবা ইনফরমেশন!**\n\nক্যাপচা মিলছে না অথবা তথ্য সঠিক নয়। আবার চেষ্টা করতে `/start` লিখুন।"
