@@ -32,17 +32,14 @@ BOARDS = [
     ("Technical", "technical"),
 ]
 
-BASE_URL = "https://www.educationboardresults.gov.bd/v2/"
-HOME_URL = "https://www.educationboardresults.gov.bd/v2/home"
+BASE_URL = "https://webresult.bd/"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = requests.Session()
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,bn;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive"
+        "Accept-Language": "en-US,en;q=0.9,bn;q=0.8"
     })
     context.user_data['session'] = session
     
@@ -55,7 +52,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "🎓 **অফিশিয়াল রিয়েল রেজাল্ট বট**\n\nপ্রথমে আপনার **Education Board** সিলেক্ট করুন:",
+        "🎓 **WebResult.bd রেজাল্ট বট**\n\nপ্রথমে আপনার **Education Board** সিলেক্ট করুন:",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -105,49 +102,25 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ ফরম্যাট সঠিক নয়! দয়া করে এভাবে দিন: `123456, 9876543210`", parse_mode="Markdown")
         return ENTER_ROLL_REG
 
-    await update.message.reply_text("🔄 অফিশিয়াল ওয়েবসাইট থেকে রিয়েল ক্যাপচা ডাউনলোড করা হচ্ছে...")
+    await update.message.reply_text("🔄 নতুন ওয়েবসাইট থেকে রিয়েল ক্যাপচা ডাউনলোড করা হচ্ছে...")
 
     try:
         session = context.user_data.get('session')
         
-        # হোমপেজ ভিজিট করে সেশন কুকিভ্যালিড করা
-        session.get(HOME_URL, timeout=10)
+        # সাইট ভিজিট করে কুকি নেওয়া
+        res = session.get(BASE_URL, timeout=10)
+        soup = BeautifulSoup(res.text, 'html.parser')
         
-        captcha_urls = [
-            f"{BASE_URL}captcha.php",
-            "https://www.educationboardresults.gov.bd/v2/captcha.php",
-            "https://www.educationboardresults.gov.bd/captcha.php"
-        ]
+        # সাইট থেকে ক্যাপচা ইমেজ খোঁজা
+        img_tag = soup.find('img', {'id': 'captcha'}) or soup.find('img', src=True)
         
-        captcha_res = None
-        for url in captcha_urls:
-            try:
-                res = session.get(url, timeout=10)
-                if res.status_code == 200 and len(res.content) > 100:
-                    captcha_res = res
-                    break
-            except:
-                continue
-
-        if captcha_res and captcha_res.content:
-            captcha_bytes = BytesIO(captcha_res.content)
-            captcha_bytes.name = "captcha.png"
+        if img_tag and img_tag.get('src'):
+            img_src = img_tag['src']
+            if not img_src.startswith('http'):
+                img_src = BASE_URL.rstrip('/') + '/' + img_src.lstrip('/')
             
-            await update.message.reply_photo(
-                photo=InputFile(captcha_bytes),
-                caption="🔐 **রিয়েল ক্যাপচা ভেরিফিকেশন:**\n\nউপরে ছবির কোডটি দেখে নিচে লিখে পাঠান:"
-            )
-        else:
-            res = session.get(HOME_URL, timeout=10)
-            soup = BeautifulSoup(res.text, 'html.parser')
-            img_tag = soup.find('img', {'id': 'captcha'}) or soup.find('img', src=True)
-            
-            if img_tag and img_tag.get('src'):
-                img_src = img_tag['src']
-                if not img_src.startswith('http'):
-                    img_src = "https://www.educationboardresults.gov.bd" + ('' if img_src.startswith('/') else '/v2/') + img_src
-                
-                captcha_res = session.get(img_src, timeout=10)
+            captcha_res = session.get(img_src, timeout=10)
+            if captcha_res.status_code == 200:
                 captcha_bytes = BytesIO(captcha_res.content)
                 captcha_bytes.name = "captcha.png"
                 
@@ -156,11 +129,13 @@ async def process_roll_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption="🔐 **রিয়েল ক্যাপচা ভেরিফিকেশন:**\n\nউপরে ছবির কোডটি দেখে নিচে লিখে পাঠান:"
                 )
             else:
-                raise Exception("Captcha fetch failed from home page.")
+                raise Exception("Failed to download captcha image.")
+        else:
+            raise Exception("Captcha image tag not found.")
 
     except Exception as e:
         logging.error(f"Captcha Error: {e}")
-        await update.message.reply_text("❌ সার্ভার থেকে ক্যাপচা আনতে ব্যর্থ হয়েছে। আবার `/start` দিন।")
+        await update.message.reply_text("❌ এই সাইট থেকে ক্যাপচা আনতে সমস্যা হয়েছে। আবার `/start` দিন।")
         return ConversationHandler.END
 
     return ENTER_CAPTCHA
@@ -174,22 +149,21 @@ async def verify_captcha_and_get_result(update: Update, context: ContextTypes.DE
     reg = context.user_data.get('reg')
     session = context.user_data.get('session')
 
-    await update.message.reply_text("🔍 বোর্ড সার্ভারে রিয়েল-টাইম রেজাল্ট যাচাই করা হচ্ছে...")
+    await update.message.reply_text("🔍 সার্ভারে রিয়েল-টাইম রেজাল্ট যাচাই করা হচ্ছে...")
 
     try:
         payload = {
-            'sr': '1',
             'board': board,
-            'passing_year': year,
+            'year': year,
             'roll': roll,
             'reg': reg,
             'captcha': user_captcha
         }
         
-        response = session.post(f"{BASE_URL}result.php", data=payload)
+        response = session.post(BASE_URL, data=payload)
         
         if response.status_code == 200 and "Invalid" not in response.text and len(response.text) > 200:
-            result_text = f"📄 **অফিশিয়াল রিয়েল-টাইম রেজাল্ট**\n━━━━━━━━━━━━━━━━━━━\n{response.text[:1500]}"
+            result_text = f"📄 **রিয়েল-টাইম রেজাল্ট (WebResult.bd)**\n━━━━━━━━━━━━━━━━━━━\n{response.text[:1500]}"
         else:
             result_text = "❌ **ভুল ক্যাপচা অথবা ইনফরমেশন!**\n\nক্যাপচা মিলছে না অথবা তথ্য সঠিক নয়। আবার চেষ্টা করতে `/start` লিখুন।"
 
@@ -197,7 +171,7 @@ async def verify_captcha_and_get_result(update: Update, context: ContextTypes.DE
 
     except Exception as e:
         logging.error(f"Result Fetch Error: {e}")
-        await update.message.reply_text("❌ রেজাল্ট ফেচ করার সময় ত্রুটি ঘটেছে। দয়া করে `/start` দিয়ে আবার চেষ্টা করুন።")
+        await update.message.reply_text("❌ রেজাল্ট আনতে ত্রুটি ঘটেছে। আবার `/start` দিয়ে চেষ্টা করুন।")
 
     return ConversationHandler.END
 
@@ -221,7 +195,7 @@ def main():
     )
 
     application.add_handler(conv_handler)
-    print("Real Result Bot is running...")
+    print("WebResult Bot is running...")
     application.run_polling()
 
 if __name__ == "__main__":
